@@ -4,6 +4,7 @@ from django.shortcuts import render
 
 
 # Create your views here.
+# from asgiref.sync import async_to_sync
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -22,16 +23,16 @@ class ImageProcessingView(APIView):
             image = serializer.validated_data['image']
             temp_image_path = f'media/uploads/{image.name}'
             os.makedirs(os.path.dirname(temp_image_path), exist_ok=True)
-
             with open(temp_image_path, 'wb+') as destination:
                 for chunk in image.chunks():
                     destination.write(chunk)
 
             try:
-                results = perform_object_detection(temp_image_path)
-                # os.remove(temp_image_path)
+                caption, results = perform_object_detection(temp_image_path)
+                os.remove(temp_image_path)
                 return Response({
                     'status': 'success',
+                    'caption': caption,
                     'results': results
 
 

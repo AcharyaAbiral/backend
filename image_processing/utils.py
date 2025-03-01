@@ -9,28 +9,50 @@ import matplotlib.pyplot as plt
 import os
 import shutil
 
+from django.apps import apps
+from deep_translator import GoogleTranslator
+
+
+map = {
+    1: 'व्यक्ति',         # person
+    2: 'गाडी',          # car
+    3: 'मोटरसाइकल',    # motorcycle
+    4: 'बिरालो',        # cat
+    5: 'कुकुर',        # dog
+    6: 'झोला',        # backpack
+    7: 'खेलकुद बल',   # sports ball
+    8: 'बोतल',        # bottle
+    9: 'कप',          # cup
+    10: 'कुर्सी',       # chair
+    11: 'सोफा',        # couch
+    12: 'ओछ्यान',      # bed
+    13: 'भान्साको टेबल',  # dining table
+    14: 'शौचालय',      # toilet
+    15: 'टिभी',       # tv
+    16: 'ल्यापटप',     # laptop
+    17: 'माउस',       # mouse
+    18: 'किबोर्ड',     # keyboard
+    19: 'मोबाइल फोन',  # cell phone
+    20: 'रेफ्रिजिरेटर',  # refrigerator
+}
+
 
 def perform_object_detection(image_path):
 
-    depth_model_config = {
-        'vits': {'encoder': 'vits', 'features': 64, 'out_channels': [48, 96, 192, 384]},
-        'vitb': {'encoder': 'vitb', 'features': 128, 'out_channels': [96, 192, 384, 768]},
-        'vitl': {'encoder': 'vitl', 'features': 256, 'out_channels': [256, 512, 1024, 1024]}
-    }
-
-    encoder = 'vits'
-    dataset = 'hypersim'
-    max_depth = 10
-    depth_model = DepthAnythingV2(
-        **{**depth_model_config[encoder], 'max_depth': max_depth})
-    depth_model.load_state_dict(torch.load(
-        f'depth_anything_v2_metric_hypersim_vits.pth', map_location='cpu'))
-    depth_model.eval()
+    image_to_text = apps.get_app_config('image_processing').image_to_text
+    caption = image_to_text(image_path)
+    caption = caption[0]['generated_text']
+    # translator = apps.get_app_config('image_processing').translator
+    # caption = await translator.translate(caption, src='en', dest='ne')
+    # caption = caption.text
+    # print(caption)
+    depth_model = apps.get_app_config('image_processing').depth_model
     raw_img = cv2.imread(image_path)
     depth = depth_model.infer_image(raw_img)
     print("depth model predicted")
 
-    yolo_model = YOLO("yolo_wts.pt")
+    # yolo_model = YOLO("yolo_wts.pt")
+    yolo_model = apps.get_app_config('image_processing').yolo_model
     with torch.no_grad():
         predictions = yolo_model.predict(source=image_path, save=False)
     print("yolo model predicted")
@@ -45,12 +67,8 @@ def perform_object_detection(image_path):
             x1, y1, x2, y2 = box.xyxy[0].tolist()
             x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
 
-            # plt.subplot(1, len(predictions), index+1)
-
-            # plt.imshow(img_array[y1:y2, x1:x2, :])
-
             confidence = box.conf[0].item()
-            class_id = int(box.cls[0].item())
+            # class_id = int(box.cls[0].item())
 
             class_label = int(box.cls[0].item())
             if (class_label == 0):
@@ -63,34 +81,41 @@ def perform_object_detection(image_path):
                     temp_img_path, detector_backend="opencv", enforce_detection=False)
 
                 for i in img:
-                    print(i)
-                    person_name = "person"
+                    # print(i)
+                    person_name = "व्यक्ति"
                     if (i['confidence'] > 0.8 and (i['facial_area']['left_eye'] != None or i['facial_area']['right_eye'] != None)):
 
-                        # if (img[0]['confidence'] > 0.8):
-                        recognition = DeepFace.find(
-                            img_path=temp_img_path, db_path="db/", detector_backend="opencv")
-                        recognition = recognition[0]
-                        print(recognition)
-                        if (len(recognition) != 0):
-                            person_name = recognition['identity'][0][3:-4]
-                            # print(f"found {person_name}")
-                        else:
-                            pass
+                        db_path = "db/"
+                        num_files = len([f for f in os.listdir(
+                            db_path) if os.path.isfile(os.path.join(db_path, f))])
+
+                        if (num_files > 1):
+                            recognition = DeepFace.find(
+                                img_path=temp_img_path, db_path=db_path, detector_backend="opencv")
+                            recognition = recognition[0]
+                        # print(recognition)
+                            if (len(recognition) != 0):
+                                person_name = recognition['identity'][0][3:-4]
+                                print(f"found {person_name}")
+                            else:
+                                pass
                         # do age and gender here only
 
-                        analysis = DeepFace.analyze(img_path=temp_img_path, actions=[
-                            "age", "gender", "emotion"])
+                        # analysis = DeepFace.analyze(img_path=temp_img_path, actions=[
+                        #     "age", "gender", "emotion"])
                         print("done")
-                        analysis = analysis[0]
-                        class_label = f"{person_name} age {analysis['age']} gender {analysis['dominant_gender']} emotion {analysis['dominant_emotion']}"
+                        # analysis = analysis[0]
+                        class_label = person_name
+                        # class_label = f"{person_name} age {analysis['age']} gender {analysis['dominant_gender']} emotion {analysis['dominant_emotion']}"
                         break
                     else:
-                        class_label = "person"
+                        class_label = "व्यक्ति"
+
                 # os.remove(temp_img_path)
 
             else:
-                class_label = str(yolo_model.names[class_label])
+                # class_label = str(yolo_model.names[class_label])
+                class_label = map[class_label+1]
             temp = {
 
                 'box': box.xyxy[0].tolist(),
@@ -101,8 +126,22 @@ def perform_object_detection(image_path):
             }
             # print(str(round(np.median(depth[y1:y2, x1:x2])), 2))
             output.append(temp)
-    plt.show()
-    return output
+    print(caption)
+    print(type(caption))
+    caption = GoogleTranslator(
+        source='en', target='ne').translate(caption)
+    print(caption)
+    # caption = caption.encode('utf-8').decode()
+    # print(caption)
+    return caption, output
+
+
+# async def translate(input):
+#     translator = apps.get_app_config('image_processing').translator
+#     print(input)
+#     output = await translator.translate(input, src='en', dest='ne')
+#     print(output.text)
+#     return output.text
 
 
 def perform_face_registration(image_path, name):
