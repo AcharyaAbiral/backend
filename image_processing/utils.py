@@ -61,6 +61,35 @@ def perform_object_detection(image_path):
     image = Image.open(image_path)
     img_array = np.array(image)
 
+    sorted_predictions = []
+    for result in predictions:
+        boxes = result.boxes
+
+    # Calculate area for each box
+        areas = []
+        for box in boxes:
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            area = (x2 - x1) * (y2 - y1)
+            areas.append(area)
+
+    # Create a list of (index, area) pairs
+        box_indices_with_areas = list(enumerate(areas))
+
+    # Sort by area (ascending order)
+        sorted_indices = [idx for idx, _ in sorted(
+            box_indices_with_areas, key=lambda x: x[1])]
+
+    # Create a new result with sorted boxes
+        sorted_boxes = [boxes[i] for i in sorted_indices]
+
+    # Store the sorted result
+        sorted_result = result
+        sorted_result.boxes = sorted_boxes
+        sorted_predictions.append(sorted_result)
+
+# Replace original predictions with sorted ones
+    predictions = sorted_predictions
+    print("done")
     for index, item in enumerate(predictions):
         boxes = item.boxes
         for box in boxes:

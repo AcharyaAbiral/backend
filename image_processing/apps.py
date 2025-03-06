@@ -15,6 +15,7 @@ class ImageProcessingConfig(AppConfig):
         # global yolo_model
 
         self.yolo_model = YOLO("yolo_wts.pt")
+        self.yolo_model.eval()
         print("yolo_model loaded")
 
         depth_model_config = {
